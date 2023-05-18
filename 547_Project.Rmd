@@ -1,0 +1,174 @@
+---
+title: "547_Project"
+author: "Ruoji Wang"
+date: "2023-05-18"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(here, readxl, dplyr, janitor, Quandl, xts, lubridate, urca, forecast, tidyverse, vars,devtools,ggthemr,formattable)
+library()
+food=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Food")
+fp=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Frozen_Pork") #Frozen Pork Data
+fb=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Frozen_Beef") #Frozen Beef Data
+dataset_names = c("fb","food","fp")
+
+for (dataset_name in dataset_names) {
+  # Load the dataset
+  dataset <- get(dataset_name)
+  # Remove rows with "NA" values
+  dataset <- dataset[complete.cases(dataset), ]
+  # Assign the modified dataset back to its original name
+  assign(dataset_name, dataset)
+}
+```
+
+# Food Industry Overview
+
+The passage, "Do producer prices predict consumer prices?", examines the relationship between producer prices and consumer prices, specifically focusing on five mid-level aggregates for the IPPI and CPI: passenger vehicles, furniture, household appliances, and household cleaning products. However, it should be noted that the category of food is represented differently in the chart. While the other categories fall under mid-level aggregates, the chart specifically showcases the CPI of "food purchased in stores" and that of "food", which is a higher aggregate level, while the former is a good indicator to consumer perspectives.
+
+## Chart 1. Food CPI VS IPPI
+
+```{r food}
+#food$`Food_CPI(Change in %)`
+#food$`Food Purchased from Store_CPI (Change in %)`
+#food$`Food_IPPI(Change in %)`
+# plot
+ggthemr("solarized")
+ggplot(food, aes(x=`Reference period`)) + 
+  geom_line(aes(y=`Food_CPI(Change in %)`, col="Food_CPI")) + 
+  geom_line(aes(y=`Food Purchased from Store_CPI (Change in %)`, col="Food Purchased from Store_CPI")) + 
+  geom_line(aes(y=`Food_IPPI(Change in %)`, col="Food_IPPI")) + 
+  labs(title="Food Sector", 
+       subtitle="", 
+       caption="Source: Statistics Canada",
+       
+       y="% (12 Month Change)") + theme(legend.position = "bottom",panel.grid.minor = element_blank(),legend.key.size = unit(0.5, "cm")) # title and caption
+  #scale_color_manual(name="", values = c("Food_CPI"="white","Food Purchased from Store_CPI"="#00ba38", "Food_IPPI"="#f8766d")) +  # line color
+   
+```
+I examined the trends of three different indices related to food: CPI of food, CPI of food purchased in store, and IPPI of food. The purpose was to identify any consistencies or variations among these indices.
+
+Upon analyzing the data, it was observed that there were notable consistencies in the trends of CPI of food and CPI of food purchased in store. However, the IPPI of food displayed a distinct pattern that differed from the other two indices in 2005.
+
+## Correlation examination
+
+The Pearson correlation coefficient is indeed a valuable tool for assessing the linear relationship between CPI and IPPI. In order to gain deeper insights into the food industry, we can initially examine the correlation between CPI and IPPI at an aggregate level. Subsequently, it is helpful to further explore specific food products to identify potential divergences within this sector.
+
+## Table 1. Pearson Coefficient of Food CPI and IPPI with Lags
+```{r cor}
+fd=food[,c(1,3:4)]
+names(fd) = c("Reference Period","CPI","IPPI")
+datasets <- list(fd, fb, fp)  # List of your datasets
+max_lag <- 4
+lags <- 0:max_lag
+cor_coefs <- matrix(NA, nrow = max_lag + 1, ncol = length(datasets))
+for (i in seq_along(datasets)) {
+  data <- datasets[[i]]  # Get the current dataset
+  for (lag in lags) {
+    lagged_cpi <- lag(data$CPI, lag)
+    d=data.frame(lagged_cpi,data$IPPI)
+    na.omit(d)
+    cor_coefs[lag + 1, i] <- cor(d$lagged_cpi, d$data.IPPI, use = "complete.obs")
+  }
+}
+
+cor_table <- data.frame(Lag = lags, cor_coefs[,1])
+names(cor_table) <-c("Lag","Correlation") 
+cor_table=formattable(cor_table,list(Correlation=color_text("red","green")))
+cor_table
+
+
+```
+
+Based on the obtained results, it is observed that the correlation has increased compared to the findings reported in the previous paper. This intriguing change in correlation prompts us to conduct a more detailed investigation into the correlation pattern during the last year.
+
+To delve deeper into the recent correlation dynamics, we will focus on analyzing the CPI and IPPI data specifically for the past year. By examining this narrower time frame, we aim to uncover any underlying factors or trends that might have contributed to the observed changes in correlation.
+
+```{r cor2022}
+fd1=tail(fd,12)
+cor=numeric(5)
+for (lag in 0:4) {
+  lagged_cpi <- lag(fd1$CPI, lag)
+  cor[lag + 1] <- cor(lagged_cpi, fd1$IPPI, use = "complete.obs")
+}
+
+cor_table <- data.frame(Lag = c(0:4),Correlation = cor)
+cor_table=formattable(cor_table,list(Correlation=color_text("red","green")))
+cor_table
+```
+
+Based on the obtained results, it is evident that the CPI variable from the previous year exhibits a stronger correlation with the IPPI variable. This finding suggests a closer relationship between consumer prices and producer prices during that period.
+
+Furthermore, it is noteworthy that there is a substantial negative correlation observed with certain lags. This intriguing pattern warrants further investigation to better understand the underlying factors contributing to this negative correlation.
+
+# Food Product Specification
+
+In the subsequent phase of our analysis, I delved into more specific food products, focusing on fresh and frozen pork and beef. These product categories were chosen as key investigation points due to their relevance and significance in the market.
+
+By examining the trends in CPI and IPPI for fresh and frozen pork and beef, it is aimed to gain deeper insights into the pricing dynamics of these specific food items. The utilization of these products as investigation points allows for a more targeted analysis, enabling us to uncover potential patterns and correlations that may be unique to this subset of the food market.
+
+## Chart 2. Fresh or frozen Pork
+
+```{r fp, echo=FALSE}
+
+ggthemr("solarized")
+ggplot(fp, aes(x=`Reference period`)) + 
+  geom_line(aes(y=CPI, col="CPI")) + 
+  geom_line(aes(y=IPPI, col="IPPI")) +  
+  labs(title="Fresh or Frozen Pork", 
+       subtitle="", 
+       caption="Source: Statistics Canada",
+       
+       y="Index (Base Period = Jan 2000") + theme(legend.position = "bottom",panel.grid.minor = element_blank(),legend.key.size = unit(0.5, "cm")) # title and caption
+  #scale_color_manual(name="", values = c("Food_CPI"="white","Food Purchased from Store_CPI"="#00ba38", "Food_IPPI"="#f8766d")) +  # line color
+
+```
+## Chart 3. Fresh or Frozen Beef
+
+```{r fb, echo=FALSE}
+ggthemr("solarized")
+ggplot(fb, aes(x=`Reference period`)) + 
+  geom_line(aes(y=CPI, col="CPI")) + 
+  geom_line(aes(y=IPPI, col="IPPI")) +  
+  labs(title="Fresh or Frozen Beef", 
+       subtitle="", 
+       caption="Source: Statistics Canada",
+       
+       y="Index (Base Period = Jan 2000") + theme(legend.position = "bottom",panel.grid.minor = element_blank(),legend.key.size = unit(0.5, "cm"))
+
+```
+
+I examined the trends of CPI and IPPI for pork and beef, focusing on the similarities and differences between the two indices. The analysis aimed to uncover notable patterns and inconsistencies, particularly in relation to the impact of the pandemic.
+
+Upon analyzing the charts depicting the trends of CPI and IPPI for pork and beef, several key observations emerged. For the majority of the time, the trends of CPI and IPPI exhibited similarities, indicating a degree of coherence between consumer prices and producer prices. However, it is important to note that the IPPI demonstrated more frequent fluctuations compared to the CPI. This could be attributed to various factors, such as changes in input costs or supply chain dynamics affecting the producer prices.
+
+Furthermore, it is noteworthy that both the IPPI and CPI experienced inconsistencies in their trends following the onset of the pandemic. This period of inconsistency refers to a time when the two indices deviate from their usual patterns or exhibit contrasting movements. Specifically, our analysis revealed that the inconsistency period for pork was longer compared to beef, suggesting that the pork market was more significantly impacted by the pandemic-induced disruptions.
+
+These findings underscore the dynamic nature of the CPI and IPPI trends, particularly during extraordinary circumstances such as a global pandemic. The inconsistencies observed post-pandemic may reflect supply chain disruptions, shifts in consumer demand, or changes in production and distribution processes. Such disruptions can have differential effects on pork and beef, contributing to the varying lengths of their inconsistency periods.
+
+
+
+```{r food repeat, include=FALSE}
+
+```
+## References
+
+Kostenbauer, K. (2022). Do producer prices predict consumer prices?
+
+## Data
+
+Statistics Canada. Table 18-10-0266-01  Industrial product price index, by product, monthly
+Statistics Canada. Table 18-10-0267-01  Industrial product price index, by Industry, monthly
+Statistics Canada. Table 18-10-0266-01  Industrial product price index, by product, monthly
+
+```{r , echo=FALSE}
+```
+
+
+```{r , echo=FALSE}
+```
