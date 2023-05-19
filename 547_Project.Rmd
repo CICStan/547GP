@@ -10,23 +10,30 @@ output:
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)
-pacman::p_load(here, readxl, dplyr, janitor, Quandl, xts, lubridate, urca, forecast, tidyverse, vars,devtools,ggthemr,formattable)
-library()
+pacman::p_load(here, readxl, dplyr, janitor, Quandl, xts, lubridate, urca, forecast, tidyverse, vars,devtools,ggthemr,formattable,tsibble)
 food=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Food")
 fp=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Frozen_Pork") #Frozen Pork Data
 fb=read_excel("Data/Deliver_MasterSheet.xlsx", sheet = "Frozen_Beef") #Frozen Beef Data
 dataset_names = c("fb","food","fp")
 
 for (dataset_name in dataset_names) {
-  # Load the dataset
   dataset <- get(dataset_name)
-  # Remove rows with "NA" values
   dataset <- dataset[complete.cases(dataset), ]
-  # Assign the modified dataset back to its original name
   assign(dataset_name, dataset)
 }
 ```
 
+```{r data, include=FALSE}
+fd=food[,c(1,3:4)]
+names(fd) = c("Reference period","CPI","IPPI")
+fd_xts=xts(fd,order.by = fd$`Reference period`,frequency = 12,xts_check_TZ = FALSE)
+fd_xts=fd_xts[,2:3]
+fp_xts=xts(fp,order.by = fp$`Reference period`,frequency = 12,xts_check_TZ = FALSE)
+fp_xts=fp_xts[,2:3]
+fb_xts=xts(fb,order.by = fb$`Reference period`,frequency = 12,xts_check_TZ = FALSE)
+fb_xts=fb_xts[,2:3]
+
+```
 # Food Industry Overview
 
 The passage, "Do producer prices predict consumer prices?", examines the relationship between producer prices and consumer prices, specifically focusing on five mid-level aggregates for the IPPI and CPI: passenger vehicles, furniture, household appliances, and household cleaning products. However, it should be noted that the category of food is represented differently in the chart. While the other categories fall under mid-level aggregates, the chart specifically showcases the CPI of "food purchased in stores" and that of "food", which is a higher aggregate level, while the former is a good indicator to consumer perspectives.
@@ -38,6 +45,11 @@ The passage, "Do producer prices predict consumer prices?", examines the relatio
 #food$`Food Purchased from Store_CPI (Change in %)`
 #food$`Food_IPPI(Change in %)`
 # plot
+
+###plot(fd_xts) Error in plot.xts(fd_xts) : 'x' must be a time-series object
+
+
+
 ggthemr("solarized")
 ggplot(food, aes(x=`Reference period`)) + 
   geom_line(aes(y=`Food_CPI(Change in %)`, col="Food_CPI")) + 
@@ -60,13 +72,34 @@ Upon analyzing the data, it was observed that there were notable consistencies i
 The Pearson correlation coefficient is indeed a valuable tool for assessing the linear relationship between CPI and IPPI. In order to gain deeper insights into the food industry, we can initially examine the correlation between CPI and IPPI at an aggregate level. Subsequently, it is helpful to further explore specific food products to identify potential divergences within this sector.
 
 ## Table 1. Pearson Coefficient of Food CPI and IPPI with Lags
+```{r cor v2}
+
+
+
+```
+
+
 ```{r cor}
-fd=food[,c(1,3:4)]
-names(fd) = c("Reference Period","CPI","IPPI")
-datasets <- list(fd, fb, fp)  # List of your datasets
+
+datasets <- list(fd, fb, fp)  
 max_lag <- 4
 lags <- 0:max_lag
 cor_coefs <- matrix(NA, nrow = max_lag + 1, ncol = length(datasets))
+
+
+
+for (i in seq_along(datasets)) {
+  data <- datasets[[i]]  # Get the current dataset
+  for (lag in lags) {
+    lagged_cpi <- lag(data$CPI, lag)
+    d=data.frame(lagged_cpi,data$IPPI)
+    na.omit(d)
+    cor_coefs[lag + 1, i] <- cor(d$lagged_cpi, d$data.IPPI, use = "complete.obs")
+  }
+}
+
+
+
 for (i in seq_along(datasets)) {
   data <- datasets[[i]]  # Get the current dataset
   for (lag in lags) {
@@ -128,6 +161,7 @@ ggplot(fp, aes(x=`Reference period`)) +
   #scale_color_manual(name="", values = c("Food_CPI"="white","Food Purchased from Store_CPI"="#00ba38", "Food_IPPI"="#f8766d")) +  # line color
 
 ```
+
 ## Chart 3. Fresh or Frozen Beef
 
 ```{r fb, echo=FALSE}
@@ -162,9 +196,9 @@ Kostenbauer, K. (2022). Do producer prices predict consumer prices?
 
 ## Data
 
-Statistics Canada. Table 18-10-0266-01  Industrial product price index, by product, monthly
-Statistics Canada. Table 18-10-0267-01  Industrial product price index, by Industry, monthly
-Statistics Canada. Table 18-10-0266-01  Industrial product price index, by product, monthly
+Statistics Canada. Table 18-10-0004-01  Consumer Price Index, monthly, not seasonally adjusted.
+Statistics Canada. Table 18-10-0266-01  Industrial product price index, by product, monthly.
+Statistics Canada. Table 18-10-0267-01  Industrial product price index, by Industry, monthly.
 
 ```{r , echo=FALSE}
 ```

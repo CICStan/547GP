@@ -1646,6 +1646,11 @@ perspectives.</p>
 #food$`Food Purchased from Store_CPI (Change in %)`
 #food$`Food_IPPI(Change in %)`
 # plot
+
+###plot(fd_xts) Error in plot.xts(fd_xts) : &#39;x&#39; must be a time-series object
+
+
+
 ggthemr(&quot;solarized&quot;)
 ggplot(food, aes(x=`Reference period`)) + 
   geom_line(aes(y=`Food_CPI(Change in %)`, col=&quot;Food_CPI&quot;)) + 
@@ -1677,12 +1682,25 @@ potential divergences within this sector.</p>
 </div>
 <div id="table-1.-pearson-coefficient-of-food-cpi-and-ippi-with-lags" class="section level2">
 <h2>Table 1. Pearson Coefficient of Food CPI and IPPI with Lags</h2>
-<pre class="r"><code>fd=food[,c(1,3:4)]
-names(fd) = c(&quot;Reference Period&quot;,&quot;CPI&quot;,&quot;IPPI&quot;)
-datasets &lt;- list(fd, fb, fp)  # List of your datasets
+<pre class="r"><code>datasets &lt;- list(fd, fb, fp)  
 max_lag &lt;- 4
 lags &lt;- 0:max_lag
 cor_coefs &lt;- matrix(NA, nrow = max_lag + 1, ncol = length(datasets))
+
+
+
+for (i in seq_along(datasets)) {
+  data &lt;- datasets[[i]]  # Get the current dataset
+  for (lag in lags) {
+    lagged_cpi &lt;- lag(data$CPI, lag)
+    d=data.frame(lagged_cpi,data$IPPI)
+    na.omit(d)
+    cor_coefs[lag + 1, i] &lt;- cor(d$lagged_cpi, d$data.IPPI, use = &quot;complete.obs&quot;)
+  }
+}
+
+
+
 for (i in seq_along(datasets)) {
   data &lt;- datasets[[i]]  # Get the current dataset
   for (lag in lags) {
@@ -1886,11 +1904,11 @@ prices?</p>
 </div>
 <div id="data" class="section level2">
 <h2>Data</h2>
-<p>Statistics Canada. Table 18-10-0266-01 Industrial product price
-index, by product, monthly Statistics Canada. Table 18-10-0267-01
-Industrial product price index, by Industry, monthly Statistics Canada.
-Table 18-10-0266-01 Industrial product price index, by product,
-monthly</p>
+<p>Statistics Canada. Table 18-10-0004-01 Consumer Price Index, monthly,
+not seasonally adjusted. Statistics Canada. Table 18-10-0266-01
+Industrial product price index, by product, monthly. Statistics Canada.
+Table 18-10-0267-01 Industrial product price index, by Industry,
+monthly.</p>
 </div>
 </div>
 
